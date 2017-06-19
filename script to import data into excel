@@ -1,0 +1,76 @@
+//The script requires basefolder and outfile as commandline arguments
+	if (!isset($argv[1]) && !isset($argv[2]))
+		die('Specify base folder and output file');
+
+	//base folder where the cache analysis files are present
+	$basefolder = $argv[1];
+	$c = new cacheAnalysis($basefolder);
+	
+	//names of the instruction whose values are to be extracted from the files - case sensitive
+	$c->instructions = ['sim_num_insn', 'sim_num_refs', 'sim_num_loads', 'sim_num_stores', 'sim_IPC', 'sim_CPI', 'il1.misses', 'dl1.misses', 'ul2.misses', 'il1.hits', 'dl1.hits', 'ul2.hits', 'il1.miss_rate', 'dl1.miss_rate', 'ul2.miss_rate'];
+	//list of folders that contain these files - case sensitive - these folders should be present within the base folder
+	$c->folders = ['bzip', 'crafty', 'eon', 'equake', 'galgel', 'gcc', 'mcf', 'mesa', 'swim', 'wupwise'];
+	//text file names - case sensitive - extension should not be specified
+	$c->files = ['A1', 'A2', 'A3', 'B1', 'B2', 'B3', 'C1', 'C2', 'C3', 'D1', 'D2', 'D3', 'def', 'run_e_32B', 'run_e_64B', 'run_e_128B', 'run_e_256B']; //uppercase filenames used for Maanasa
+	
+	//$c->files = ['1a','1b','1c','2a','2b','2c','3a','3b','3c','4a','4b','4c','run_e_32B','run_e_64B','run_e_128B','run_e_256B']; //lowercase filenames used for Saya
+	
+	//output CSV file
+	$outfile = $argv[2];
+	$c->exportCSV($outfile);
+	
+	
+	// DO NOT MODIFY THE CODE BELOW THIS LINE
+	// --------------------------------------
+	class cacheAnalysis {
+		
+		public $base = './';
+		public $instructions = [];
+		public $folders = [];
+		public $files = [];
+		public $data = [];
+		public $exportData = '';
+		
+		function __construct($base) {
+			$this->base = $base;
+		}
+		
+		function loopFileFolders() {
+			echo "Missing files will be listed out\n\n";
+			foreach($this->files as $fl)
+				foreach($this->folders as $fd)
+					$this->extractData($fl, $fd);
+		}
+		
+		function extractData($file, $folder) {
+			$txtfile = $this->base.$folder.'/'.$file.'.txt';
+			if (!is_file($txtfile)) {
+				echo "{$txtfile} is missing\n";
+				return false;
+			}
+			$lines = file($txtfile);
+			foreach($lines as $l) {
+				$l = preg_replace(['/\s+/ix', '/#.*?$/ix'], [' ', ''], $l);
+				list($ins, $value) = explode(' ', $l);
+				if (in_array(trim($ins), $this->instructions))
+					$this->data[$file][$ins][$folder] = trim($value);
+			}
+		}
+		
+		function exportCSV($outfile) {
+			if (count($this->data)==0)
+				$this->loopFileFolders();
+			$exportSet = [];
+			foreach($this->data as $fname=>$filedata) {
+				$exportSet[$fname] = [];
+				foreach($filedata as $ins=>$folderdata) {
+					if (count($exportSet[$fname])==0)
+						$exportSet[$fname][] = "\n".implode(', ', [$fname, implode(',', array_keys($folderdata))]);
+					$exportSet[$fname][] = implode(', ', [$ins, implode(',', array_values($folderdata))]);
+				}
+				$this->exportData .= "\n".implode("\n", $exportSet[$fname]);
+				unset($exportSet[$fname]);
+			}
+			file_put_contents($outfile, $this->exportData);
+		}
+	}
